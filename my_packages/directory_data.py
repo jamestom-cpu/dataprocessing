@@ -109,7 +109,20 @@ class GetCoordinates():
             )
 
 
-    
+def make_all_generators(file):
+    coordinates_dict = make_coord_dict(file)
+    return {k:make_generator(*np.meshgrid(coordinates[k]["x"], coordinates[k]["y"])) for k in coordinates.keys()}
+
+def make_coord_dict(file):
+    with h5py.File(file, "r") as f:
+        return {
+            group: dict(
+                x=np.array(f[group]["coordinates"]["x_coordinates"]),
+                y=np.array(f[group]["coordinates"]["y_coordinates"])
+            )
+
+            for group in see_groups_and_datasets(file)["group_keys"]
+        }   
     
 def make_generator(xcoordinates, ycoordinates):
     # WARNING: the assumption is that every xcoordinate has an associated y coordinate
