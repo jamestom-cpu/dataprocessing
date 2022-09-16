@@ -1,2 +1,3 @@
 *.log
 .Trash-0
+my_packages/__*

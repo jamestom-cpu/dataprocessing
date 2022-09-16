@@ -6,6 +6,7 @@ from copy import copy
 from my_packages import my_hdf5
 from my_packages.utils import probes
 from my_packages.my_hdf5 import *
+from tqdm import tqdm
 
 class Batch_Generator():
     # this class defines a generator that loads filenames in an array until the numbering
@@ -17,6 +18,7 @@ class Batch_Generator():
         self.coordinate_gen = iter(parsed)
         self.current_batch = []
         self.number_of_batches_done = 0
+        self.batch_size = 50
 
     def __len__(self):
         return len(self.parsed)    
@@ -27,7 +29,7 @@ class Batch_Generator():
     def __next__(self):
         current_coordinates = next(self.coordinate_gen)
         current_name = "x"+current_coordinates[0]+"y"+current_coordinates[1]
-        batch = [current_name+str(ii+1)+".csv" for ii in range(50)]
+        batch = [current_name+str(ii+1)+".csv" for ii in range(self.batch_size)]
 
         self.current_batch=batch
         self.number_of_batches_done += 1
@@ -264,3 +266,50 @@ def get_group_name(probe, path, probes):
     if probe == probes[2]:
         return probe + "_" + path.split("/")[-1]
     return
+
+    ######################################################################################################
+    ######################################################################################################
+
+    # create an h5 file with all the measurements compressed
+
+def measurements2dataset(library, batch_generator, dataset_name, compression_level=4):
+    number_of_batches = len(batch_generator)
+    datapoints = int(100e3)
+    batch_size = batch_generator.batch_size
+    # batch_size = batch_generator.batch_size
+
+    dataset_shape = (batch_size, number_of_batches, 2, datapoints)
+
+    dataset_attr = dict(
+        observation_interval = "10us",
+        number_of_points = datapoints,
+        max_frequency_resolution = 1/datapoints, 
+        structure_of_numpy_array = ("batch_size", "number_of_batches", "time, amplitude", "datapoints") 
+    )
+
+    if not exists(library):
+        build_hdf5(name=library)
+
+    with h5py.File(library, "a") as f:
+        dataset = f.require_dataset(
+            dataset_name, 
+            shape=dataset_shape, 
+            dtype="float64", 
+            chunks=(batch_size, 1, 2, datapoints), 
+            compression=compression_level
+            )
+        for batch in tqdm(batch_generator):
+            dataset[:, batch_generator.number_of_batches_done, :, : ] = get_numpy_from_batch(batch)
+    
+
+def get_numpy_from_batch(batch):
+    readings = [list(read_csv(csv_file_path)) for csv_file_path in batch]
+
+    # I must transpose so that the shape has the number of points in the last position and 2 - ie time and amplitude - in 
+    # second to last place
+    
+    return np.array(readings).transpose(0,2,1)
+
+def read_csv(filename):
+    for row in open(filename):
+        yield list(map(lambda x: float(x),row.split(",")[-2:]))
