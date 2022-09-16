@@ -171,9 +171,12 @@ def save_measurement_info(library, dh, probes, measurement_info={}, group_info={
     # open the group
     with h5py.File(library, "a") as f:
         g = f[group_name]
-        # create the dataset
-        # require_dataset is the same as create_dataset. However, if the dataset already exists it does not overwirte.
+        
+        g.attrs["creation date"]= dt_string
+        g.attrs["measurement_path"] = path
+        g.attrs["probe"] = probe
 
+        
         #check if the coordinate group already exists
         group_keys = [key for key, items in g.items() if isinstance(items, h5py.Group)]
 
@@ -190,10 +193,10 @@ def save_measurement_info(library, dh, probes, measurement_info={}, group_info={
        
 
         coord_gr = g.create_group("coordinates")
-        coord_gr.attrs["creation date"]= dt_string
-        coord_gr.attrs["measurement_path"] = path
-        coord_gr.attrs["probe"] = probe
         coord_gr.attrs.update(measurement_info)
+
+        # create the dataset
+        # require_dataset is the same as create_dataset. However, if the dataset already exists it does not overwirte.
 
         x_ds=coord_gr.require_dataset("x_coordinates", shape=xcoord.shape, dtype=np.float32, data=xcoord)
         y_ds=coord_gr.require_dataset("y_coordinates", shape=ycoord.shape, dtype=np.float32, data=ycoord)
