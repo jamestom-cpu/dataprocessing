@@ -149,10 +149,13 @@ class Batch_Generator():
     # The batch generator expects a generator as input, that returns one at a time the filenames. 
     # In particular such a generator is defined as os.scandir(<directory_path>)
     def __init__(self, coordinates):
+        self.__len__ = len(coordinates)
         self.coordinate_gen = iter(coordinates)
         self.current_batch = []
         self.number_of_batches_done = 0
     
+    def __len__(self):
+        return self.__len__
     
     def __iter__(self):
         return self

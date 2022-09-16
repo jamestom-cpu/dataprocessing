@@ -21,5 +21,5 @@ docker run \
 $image 
 
 docker exec -d $name bash -c 'printf "username=$username\npassword=$password" > /credentials.txt'
-docker exec -d $name bash -c "mount -t cifs //$NAS_address_from_PolimiNW/monopoli /NAS --verbose -o credentials=/credentials.txt"
+docker exec -d $name bash -c "mount -t cifs //$NAS_address_from_local/monopoli /NAS --verbose -o credentials=/credentials.txt"
 

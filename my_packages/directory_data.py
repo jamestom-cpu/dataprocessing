@@ -2,6 +2,7 @@ import os
 import re
 import numpy as np
 from datetime import datetime
+from copy import copy
 from my_packages import my_hdf5
 from my_packages.utils import probes
 from my_packages.my_hdf5 import *
@@ -11,11 +12,14 @@ class Batch_Generator():
     # returns to 1. Therefore all the measurements of the same point should be grouped in one batch. 
     # The batch generator expects a generator as input, that returns one at a time the filenames. 
     # In particular such a generator is defined as os.scandir(<directory_path>)
-    def __init__(self, coordinates):
-        self.coordinate_gen = iter(coordinates)
+    def __init__(self, parsed):
+        self.parsed = parsed
+        self.coordinate_gen = iter(parsed)
         self.current_batch = []
         self.number_of_batches_done = 0
-    
+
+    def __len__(self):
+        return len(self.parsed)    
     
     def __iter__(self):
         return self
@@ -29,6 +33,29 @@ class Batch_Generator():
         self.number_of_batches_done += 1
 
         return self.current_batch
+
+
+
+
+class RootBatchGen(Batch_Generator):
+    def __init__(self, parsed, root):
+        Batch_Generator.__init__(self, parsed)
+        self.local_gen = Batch_Generator(self.parsed)
+        self.root = root
+        self.default_next = lambda : copy(Batch_Generator.__next__)(self)
+
+    def add_root(func):
+        def inner(self):
+            batch = [os.path.join(self.root, string) for string in func(self)]
+            self.current_batch_fullpath = batch
+            return batch
+        return inner
+    
+
+    @add_root
+    def __next__(self):
+        return self.default_next()
+        
 
 
 
@@ -109,9 +136,19 @@ class GetCoordinates():
             )
 
 
-def make_all_generators(file):
+def make_all_generators(file, return_fullpaths=False):
     coordinates_dict = make_coord_dict(file)
-    return {k:make_generator(*np.meshgrid(coordinates[k]["x"], coordinates[k]["y"])) for k in coordinates.keys()}
+    generators = {}
+    for k in coordinates_dict.keys():
+        with h5py.File(file, "r") as f:
+            path = f[k].attrs["measurement_path"] 
+        generators[k] = make_generator(
+            coordinates_dict[k]["x"], 
+            coordinates_dict[k]["y"],
+            include_file_location = path if return_fullpaths else False
+        )
+    return generators
+    
 
 def make_coord_dict(file):
     with h5py.File(file, "r") as f:
@@ -124,11 +161,11 @@ def make_coord_dict(file):
             for group in see_groups_and_datasets(file)["group_keys"]
         }   
     
-def make_generator(xcoordinates, ycoordinates):
+def make_generator(xcoordinates, ycoordinates, include_file_location=False):
     # WARNING: the assumption is that every xcoordinate has an associated y coordinate
     # get the coordinates from the parsed strings
     parsed_strings = arrays_2_parsed_strings(xcoordinates, ycoordinates)
-    batch_generator = Batch_Generator(parsed_strings)
+    batch_generator = RootBatchGen(parsed_strings, include_file_location) if include_file_location else Batch_Generator(parsed_strings) 
 
     return batch_generator
 
